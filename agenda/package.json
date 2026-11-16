@@ -1,0 +1,14 @@
+{
+  "name": "agenda",
+  "private": true,
+  "type": "module",
+  "description": "Agenda personal (PWA). La app no necesita compilación; estas herramientas son solo para pruebas y para empaquetar el servidor.",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "build:worker": "esbuild worker/src/index.js --bundle --format=esm --target=es2022 --outfile=worker/dist/worker.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "http_ece": "^1.2.1"
+  }
+}

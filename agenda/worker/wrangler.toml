@@ -1,0 +1,14 @@
+# Configuración opcional para desplegar con la herramienta "wrangler".
+# No es necesaria si pegas worker/dist/worker.js en el panel de Cloudflare
+# (el método explicado en INSTALACION.md).
+name = "agenda-push"
+main = "dist/worker.js"
+compatibility_date = "2025-06-01"
+
+[triggers]
+crons = ["* * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "agenda"
+database_id = "PEGA-AQUI-EL-ID-DE-TU-BASE-D1"
