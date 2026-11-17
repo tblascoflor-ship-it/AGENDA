@@ -79,6 +79,9 @@ const P = {
   cancel: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM6 6l12 12',
   chevron: 'M9 6l6 6-6 6',
   down: 'M6 9l6 6 6-6',
+  chart: 'M5 20v-8M12 20V5M19 20v-5',
+  bolt: 'M13 3L5 14h6l-1 7 8-11h-6z',
+  list: 'M4 7l1.6 1.6L8.5 5.5M4 16l1.6 1.6L8.5 14.5M12 7h8M12 16h8',
 };
 export function Icon({ name, size = 22, stroke = 1.8, cls = '' }) {
   return html`<svg class=${'ic ' + cls} width=${size} height=${size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width=${stroke} stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d=${P[name]} /></svg>`;
@@ -184,8 +187,9 @@ export function TaskRow({ inst, today, mode = 'list', onToggle, onOpen }) {
         <div class="row-title">${inst.title || 'Sin título'}</div>
         <div class="row-meta">
           ${bits.map((b) => html`<span>${b}</span>`)}
+          ${inst.subtasks.length > 0 && html`<span class="kind"><${Icon} name="list" size=${13} /> ${inst.subtasks.filter((x) => inst.subDone.includes(x.id)).length}/${inst.subtasks.length}</span>`}
           ${inst.recurring && html`<${Icon} name="repeat" size=${13} />`}
-          ${inst.reminders.length > 0 && M.isPending(inst) && html`<${Icon} name="bell" size=${13} />`}
+          ${(inst.reminders.length > 0 || inst.nag > 0) && M.isPending(inst) && html`<${Icon} name="bell" size=${13} />`}
         </div>
       </div>
       ${M.isPending(inst) && html`<span class=${`prio p-${inst.priority}`}>${M.prioLabel(inst.priority)}</span>`}

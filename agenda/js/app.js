@@ -12,6 +12,8 @@ import { Tasks } from './ui/tasks.js';
 import { Settings, CategoryEditor } from './ui/settings.js';
 import { Editor } from './ui/editor.js';
 import { Detail, Reschedule, Search, openEditor } from './ui/detail.js';
+import { QuickAdd, FindSlot, Stats, IcsImport } from './ui/extras.js';
+import { openLayer } from './ui/common.js';
 
 const TABS = [
   { id: 'home', label: 'Inicio', icon: 'home' },
@@ -19,7 +21,7 @@ const TABS = [
   { id: 'tasks', label: 'Tareas', icon: 'tasks' },
   { id: 'settings', label: 'Ajustes', icon: 'settings' },
 ];
-const LAYERS = { editor: Editor, detail: Detail, reschedule: Reschedule, search: Search, category: CategoryEditor, menu: Menu };
+const LAYERS = { editor: Editor, detail: Detail, reschedule: Reschedule, search: Search, category: CategoryEditor, menu: Menu, quick: QuickAdd, slot: FindSlot, stats: Stats, icsimport: IcsImport };
 
 function applyTheme(theme) {
   const root = document.documentElement;
@@ -85,6 +87,7 @@ function App() {
     const date = tab === 'calendar' ? calDate : ui.today;
     const label = date === ui.today ? '' : `Para el ${D.fmtLong(date)}`;
     menu(label, [
+      { label: 'Escribir rápido', run: () => openLayer({ type: 'quick', date: date === ui.today ? '' : date }) },
       { label: 'Nueva actividad', run: () => openEditor({ kind: 'event', date }) },
       { label: 'Nueva tarea', run: () => openEditor({ kind: 'task', date }) },
       { label: 'Nuevo recordatorio', run: () => openEditor({ kind: 'reminder', date }) },

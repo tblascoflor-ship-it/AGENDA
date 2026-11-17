@@ -92,7 +92,10 @@ export function Tasks({ filter, onFilter, cat, onCat }) {
           <h1>Tareas</h1>
           <p class="sub">${data.pending.filter((t) => t.date <= today).length} para hoy o atrasadas · ${data.done.length} completadas</p>
         </div>
-        <button class="icon-btn" aria-label="Buscar" onClick=${() => openLayer({ type: 'search' })}><${Icon} name="search" /></button>
+        <div class="top-actions">
+          <button class="icon-btn" aria-label="Estadísticas" onClick=${() => openLayer({ type: 'stats' })}><${Icon} name="chart" /></button>
+          <button class="icon-btn" aria-label="Buscar" onClick=${() => openLayer({ type: 'search' })}><${Icon} name="search" /></button>
+        </div>
       </header>
       <div class="filters">
         ${FILTERS.map((f) => html`<button key=${f.id} class=${'fchip' + (filter === f.id ? ' on' : '')} aria-pressed=${filter === f.id} onClick=${() => onFilter(f.id)}>${f.label}${f.id === 'overdue' && overdue.length ? html` <b>${overdue.length}</b>` : ''}</button>`)}

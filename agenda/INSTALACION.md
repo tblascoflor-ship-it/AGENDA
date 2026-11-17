@@ -1,5 +1,7 @@
 # Instalación de la agenda en tu iPhone 13
 
+Las novedades de la versión 1.1 y cómo actualizar están en [NOVEDADES.md](NOVEDADES.md).
+
 Todo se hace gratis desde un ordenador con Windows y el iPhone. No hace falta Mac, Xcode, App Store ni instalar ningún programa.
 
 Hay dos piezas:
@@ -146,15 +148,16 @@ Una app web no puede crear un widget propio en iOS. Estas son las alternativas g
 - **Avisos creados sin conexión.** Se guardan en el teléfono, pero no se programan en el servidor hasta que vuelve Internet y se sincronizan.
 - **Zona horaria.** Los avisos se calculan en hora de Madrid (Europe/Madrid), con los cambios de hora de verano e invierno.
 - **Tareas sin hora.** Sus avisos «antes» toman como referencia las 09:00 del día límite.
+- **Avisos insistentes.** Solo se envían entre las 8:00 y las 22:00 y durante 14 días como máximo por tarea.
 - **Límites del plan gratuito.** El cron hace 1.440 ejecuciones al día de las 100.000 permitidas. Cada ejecución dispone de 10 ms de procesador; el cifrado de un aviso consume en torno a 1 ms en las mediciones hechas fuera de Cloudflare. Si alguna vez vieras «Exceeded CPU Time Limits» en *Workers › agenda-push › Metrics*, avísame.
 
 ## Qué se ha probado y qué no
 
 Probado antes de entregarte el proyecto (puedes repetirlo con `npm install` y `npm test` si instalas Node.js; no es necesario para usar la app):
 
-- Recurrencias, excepciones, tareas acumuladas, cambios de hora y exportación de calendario: 14 pruebas automáticas.
-- Servidor: autenticación, sincronización, programación, envío sin duplicados, reintentos, cancelación de avisos al cambiar o completar, y cifrado del mensaje verificado descifrándolo con una biblioteca independiente: 7 pruebas automáticas contra un servicio push simulado. Además se ejecutó en el motor real de Cloudflare en local para probar la sincronización con la app.
-- La app en un navegador con tamaño de iPhone 13: los criterios de aceptación uno por uno, incluido el arranque sin conexión: 14 pruebas.
+- Recurrencias, excepciones, tareas acumuladas, cambios de hora, exportación e importación de calendario, captura rápida, huecos libres, avisos insistentes y estadísticas: 22 pruebas automáticas.
+- Servidor: autenticación, sincronización, programación, envío sin duplicados, reintentos, cancelación de avisos al cambiar o completar, y cifrado del mensaje verificado descifrándolo con una biblioteca independiente, avisos insistentes y revisión semanal: 8 pruebas automáticas contra un servicio push simulado. Además se ejecutó en el motor real de Cloudflare en local para probar la sincronización con la app.
+- La app en un navegador con tamaño de iPhone 13: los criterios de aceptación uno por uno, incluido el arranque sin conexión, más las funciones de la versión 1.1: 21 pruebas.
 
 No se ha podido probar sin tu iPhone y tu cuenta, y por eso existe el paso 9: la entrega real a través de Apple, el aspecto exacto en Safari de iOS y el consumo de procesador dentro de Cloudflare.
 

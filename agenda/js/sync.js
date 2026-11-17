@@ -37,6 +37,13 @@ export async function api(path, { method = 'GET', body, cfg } = {}) {
       throw err;
     }
     return data;
+  } catch (e) {
+    if (e && e.name === 'AbortError') {
+      const err = new Error('El servidor no ha respondido a tiempo. Revisa la conexión e inténtalo de nuevo.');
+      err.name = 'AbortError';
+      throw err;
+    }
+    throw e;
   } finally {
     clearTimeout(timer);
   }

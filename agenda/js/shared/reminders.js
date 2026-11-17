@@ -64,7 +64,7 @@ export function computeFires(item, fromMs, toMs, tz = DEFAULT_TZ) {
   if (!item || item.deleted || !item.date) return [];
   const all = [item.reminders || []].concat(Object.values(item.overrides || {}).map((o) => (o && o.reminders) || []));
   let maxMin = 0;
-  let any = false;
+  let any = item.kind === 'task' && (item.nag > 0 || Object.values(item.overrides || {}).some((o) => o && o.nag > 0));
   for (const list of all)
     for (const r of list) {
       any = true;
@@ -75,7 +75,7 @@ export function computeFires(item, fromMs, toMs, tz = DEFAULT_TZ) {
   const toDate = D.addDays(utcToZoned(toMs, tz).date, Math.ceil(maxMin / 1440) + 1);
   const out = new Map();
   const rec = isRecurring(item);
-  const add = (inst, fireAt, absKey) => {
+  const add = (inst, fireAt, absKey, body) => {
     if (!(fireAt >= fromMs && fireAt < toMs)) return;
     const minute = Math.floor(fireAt / 60000);
     const id = `${item.id}|${absKey || inst.key}|${minute}`;
@@ -86,7 +86,7 @@ export function computeFires(item, fromMs, toMs, tz = DEFAULT_TZ) {
       id,
       fireAt: minute * 60000,
       title: inst.title || (inst.kind === 'task' ? 'Tarea' : 'Recordatorio'),
-      body: whenText(inst, fireLocal.date, Math.round((base - fireAt) / 60000)),
+      body: body ? body(fireLocal.date) : whenText(inst, fireLocal.date, Math.round((base - fireAt) / 60000)),
       date: inst.date,
     });
   };
@@ -117,7 +117,52 @@ export function computeFires(item, fromMs, toMs, tz = DEFAULT_TZ) {
       if (next) add(next, fireAt, 'abs');
     }
   }
+  // Avisos insistentes: mientras la tarea siga pendiente después de su hora límite
+  if (item.kind === 'task') {
+    const list = rec ? expand(item, D.addDays(fromDate, -NAG_DAYS), toDate) : insts;
+    for (const inst of list) {
+      if (!(inst.nag > 0) || !isPending(inst)) continue;
+      const text = (fireDate) =>
+        fireDate === inst.date ? (inst.time ? `Sigue pendiente · vencía a las ${inst.time}` : 'Sigue pendiente · era para hoy') : `Sigue pendiente desde el ${D.fmtShort(inst.date)}`;
+      for (const t of nagTimes(inst, inst.nag, fromMs, toMs, tz)) add(inst, t, 'nag', text);
+    }
+  }
   return Array.from(out.values()).sort((a, b) => a.fireAt - b.fireAt);
+}
+
+export const NAG_DAYS = 14; // se insiste como máximo durante 14 días
+export const NAG_OPTIONS = [
+  { min: 0, label: 'No' },
+  { min: 30, label: 'Cada 30 minutos' },
+  { min: 60, label: 'Cada hora' },
+  { min: 120, label: 'Cada 2 horas' },
+  { min: 240, label: 'Cada 4 horas' },
+  { min: 1440, label: 'Cada día' },
+];
+export const nagLabel = (min) => (NAG_OPTIONS.find((o) => o.min === min) || { label: `Cada ${min} minutos` }).label;
+
+// Instantes en que se insiste: cada `step` minutos desde la hora límite, solo
+// entre las 08:00 y las 22:00. «Cada día» avisa a las 09:00 de los días siguientes.
+function nagTimes(inst, step, fromMs, toMs, tz) {
+  const res = [];
+  if (step >= 1440) {
+    for (let d = D.addDays(utcToZoned(fromMs, tz).date, -1); ; d = D.addDays(d, 1)) {
+      const t = zonedToUtc(d, DEFAULT_TIME, tz);
+      if (t >= toMs) break;
+      const n = D.diffDays(inst.date, d);
+      if (n >= 1 && n <= NAG_DAYS && t >= fromMs) res.push(t);
+    }
+    return res;
+  }
+  const base = zonedToUtc(inst.date, baseHM(inst), tz);
+  const stepMs = step * 60000;
+  const last = base + NAG_DAYS * 86400000;
+  const k = Math.max(1, Math.ceil((fromMs - base) / stepMs));
+  for (let t = base + k * stepMs; t < toMs && t <= last; t += stepMs) {
+    const hm = utcToZoned(t, tz).hm;
+    if (hm >= '08:00' && hm <= '22:00') res.push(t);
+  }
+  return res;
 }
 
 // ¿Hasta qué fecha puede seguir generando avisos o apareciendo como pendiente?

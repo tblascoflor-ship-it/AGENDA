@@ -246,3 +246,33 @@ test('aviso de prueba programado, resumen diario, Atajos y calendario .ics', asy
   assert.match(ics, /RRULE:FREQ=WEEKLY;INTERVAL=1;WKST=MO;BYDAY=TH/);
   assert.match(ics, /SUMMARY:☐ Comprar material/);
 });
+
+test('avisos insistentes y revisión semanal', async () => {
+  clock = Date.parse('2027-01-11T08:00:00Z'); // lunes
+  const t = item({ id: 'nag1', kind: 'task', title: 'Enviar informe', date: '2027-01-11', time: '10:00', priority: 'high', nag: 60 });
+  await api('/api/sync', { method: 'POST', body: { since: 0, changes: [t] } });
+  pushes.length = 0;
+  for (const hm of ['09:00', '09:30', '10:00', '10:01', '11:00', '12:00']) await tickAt(`2027-01-11T${hm}:02Z`);
+  const got = pushes.map((p) => decrypt(phone, p).notification).filter((n) => n.title === 'Enviar informe');
+  assert.deepEqual(got.map((n) => n.body), ['Sigue pendiente · vencía a las 10:00', 'Sigue pendiente · vencía a las 10:00', 'Sigue pendiente · vencía a las 10:00']); // 11:00, 12:00 y 13:00 de Madrid
+  // al completarla deja de insistir
+  clock += 1000;
+  await api('/api/sync', { method: 'POST', body: { since: 0, changes: [{ ...t, doneAt: new Date(clock).toISOString(), updatedAt: clock }] } });
+  pushes.length = 0;
+  for (const hm of ['13:00', '14:00', '15:00']) await tickAt(`2027-01-11T${hm}:02Z`);
+  assert.equal(pushes.map((p) => decrypt(phone, p).notification).filter((n) => n.title === 'Enviar informe').length, 0);
+
+  // revisión semanal: domingo a las 19:00 de Madrid
+  await api('/api/sync', { method: 'POST', body: { since: 0, changes: [{ id: 'settings', kind: 'settings', digestOn: false, weeklyOn: true, weeklyDay: 7, weeklyTime: '19:00', updatedAt: clock + 1 }] } });
+  pushes.length = 0;
+  await tickAt('2027-01-16T18:00:02Z'); // sábado: no
+  await tickAt('2027-01-17T17:59:02Z'); // domingo 18:59: aún no
+  assert.equal(pushes.filter((p) => /^Tu semana/.test(decrypt(phone, p).notification.title)).length, 0);
+  await tickAt('2027-01-17T18:00:02Z');
+  await tickAt('2027-01-17T18:01:02Z');
+  const weekly = pushes.map((p) => decrypt(phone, p).notification).filter((n) => /^Tu semana/.test(n.title));
+  assert.equal(weekly.length, 1);
+  assert.equal(weekly[0].title, 'Tu semana: 18–24 ene');
+  assert.match(weekly[0].body, /^\d+ actividad(es)? · \d+ tareas? · \d+ pendientes? de antes/);
+  assert.match(weekly[0].body, /Día más cargado: /);
+});

@@ -2,7 +2,7 @@
 // Los datos de la agenda NO están aquí (viven en IndexedDB): actualizar o
 // borrar esta caché nunca borra actividades ni tareas.
 
-const VERSION = '1.0.0'; // cámbialo al publicar una versión nueva
+const VERSION = '1.1.0'; // cámbialo al publicar una versión nueva
 const CACHE = `agenda-${VERSION}`;
 const FILES = [
   './',
@@ -19,6 +19,10 @@ const FILES = [
   './js/shared/reminders.js',
   './js/shared/tz.js',
   './js/shared/ics.js',
+  './js/shared/quick.js',
+  './js/shared/slots.js',
+  './js/shared/stats.js',
+  './js/shared/icsimport.js',
   './js/ui/common.js',
   './js/ui/home.js',
   './js/ui/calendar.js',
@@ -26,6 +30,7 @@ const FILES = [
   './js/ui/settings.js',
   './js/ui/editor.js',
   './js/ui/detail.js',
+  './js/ui/extras.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',

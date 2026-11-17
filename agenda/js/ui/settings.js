@@ -7,7 +7,7 @@ import * as store from '../store.js';
 import * as sync from '../sync.js';
 import { Sheet, Icon, Segmented, openLayer, closeLayer, toast, confirmDanger, ui } from './common.js';
 
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '1.1.0';
 
 async function deliver(name, text, type) {
   const blob = new Blob([text], { type });
@@ -102,6 +102,17 @@ function Notifications({ info, subscribed, refresh }) {
         ${store.state.settings.digestOn &&
         html`<label class="cell"><span>Hora</span><input type="time" value=${store.state.settings.digestTime || '07:30'} onChange=${(e) => e.target.value && store.save([{ ...store.state.settings, digestTime: e.target.value }])} /></label>`}
         <p class="note">Un aviso cada mañana con tus actividades, las tareas del día y las atrasadas.</p>
+      </div>
+      <div class="card">
+        <label class="cell"><span>Revisión semanal</span><input type="checkbox" class="switch" checked=${!!store.state.settings.weeklyOn} onChange=${(e) => store.save([{ weeklyDay: 7, weeklyTime: '19:00', ...store.state.settings, weeklyOn: e.target.checked }])} /></label>
+        ${store.state.settings.weeklyOn &&
+        html`<label class="cell"><span>Día</span>
+            <select value=${String(store.state.settings.weeklyDay || 7)} onChange=${(e) => store.save([{ ...store.state.settings, weeklyDay: +e.target.value }])}>
+              ${D.DIAS.map((d, i) => html`<option value=${String(i + 1)}>${D.cap(d)}</option>`)}
+            </select>
+          </label>
+          <label class="cell"><span>Hora</span><input type="time" value=${store.state.settings.weeklyTime || '19:00'} onChange=${(e) => e.target.value && store.save([{ ...store.state.settings, weeklyTime: e.target.value }])} /></label>`}
+        <p class="note">Un aviso semanal con lo que viene en los 7 días siguientes: actividades, tareas, lo pendiente de antes y el día más cargado.</p>
       </div>`}
       ${info &&
       info.next &&
@@ -164,7 +175,13 @@ function Server({ info, refresh }) {
 
 function Backup({ info }) {
   const fileRef = useRef(null);
+  const icsRef = useRef(null);
   const today = ui.today;
+  const pickIcs = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (file) openLayer({ type: 'icsimport', text: await file.text(), name: file.name });
+  };
   const exportJson = () => deliver(`agenda-copia-${today}.json`, JSON.stringify(store.exportData()), 'application/json');
   const exportIcs = () => deliver(`agenda-${today}.ics`, buildICS(store.state.items), 'text/calendar');
   const importJson = async (e) => {
@@ -188,6 +205,8 @@ function Backup({ info }) {
         <p class="note">Al importar no se duplica nada: cada elemento se reconoce por su identificador y solo se sustituye si la copia es más reciente.</p>
       </div>
       <div class="card">
+        <button class="cell-btn" onClick=${() => icsRef.current.click()}>Importar calendario (.ics)</button>
+        <input ref=${icsRef} type="file" accept=".ics,text/calendar" hidden onChange=${pickIcs} />
         <button class="cell-btn" onClick=${exportIcs}>Exportar calendario (.ics)</button>
         ${info && info.feedUrl && html`<button class="cell-btn" onClick=${() => copy(info.feedUrl.replace(/^https:/, 'webcal:'), 'Enlace copiado')}>Copiar enlace de suscripción</button>`}
         <p class="note">${info && info.feedUrl ? 'Con el enlace de suscripción, el Calendario de Apple muestra tu agenda (también en su widget) y se actualiza solo. Trátalo como una contraseña.' : 'El archivo .ics se puede abrir con el Calendario de Apple.'}</p>

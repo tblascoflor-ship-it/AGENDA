@@ -1,9 +1,9 @@
 // Formulario de creación y edición de actividades, tareas y recordatorios.
 
-import { html, useState, useRef, useEffect } from '../vendor/preact-htm.js';
+import { html, useState, useRef, useEffect, useLayoutEffect } from '../vendor/preact-htm.js';
 import * as D from '../shared/dates.js';
 import * as M from '../shared/model.js';
-import { QUICK_REMINDERS, reminderLabel, reminderKey } from '../shared/reminders.js';
+import { QUICK_REMINDERS, NAG_OPTIONS, reminderLabel, reminderKey } from '../shared/reminders.js';
 import * as store from '../store.js';
 import * as actions from '../actions.js';
 import { Sheet, Icon, closeLayer, closeAll, toast, ui } from './common.js';
@@ -31,7 +31,7 @@ function modeOf(repeat, date) {
   return 'custom';
 }
 
-function initial({ kind, inst, date, start }) {
+function initial({ kind, inst, date, start, preset }) {
   if (inst) {
     const r = inst.item.repeat || null;
     return {
@@ -46,6 +46,8 @@ function initial({ kind, inst, date, start }) {
       time: inst.time || '',
       priority: inst.priority,
       reminders: inst.reminders.slice(),
+      nag: inst.nag || 0,
+      subtasks: inst.subtasks.map((x) => ({ ...x })),
       mode: modeOf(r, inst.key),
       freq: (r && r.freq) || 'weekly',
       interval: (r && r.interval) || 1,
@@ -61,7 +63,7 @@ function initial({ kind, inst, date, start }) {
     const next = Math.min(23 * 60, Math.ceil((D.hmToMin(ui.now) + 1) / 60) * 60);
     s = d === ui.today ? D.minToHM(next) : '09:00';
   }
-  return {
+  const base = {
     kind,
     title: '',
     notes: '',
@@ -73,12 +75,21 @@ function initial({ kind, inst, date, start }) {
     time: kind === 'reminder' ? s : '',
     priority: 'medium',
     reminders: kind === 'event' ? [{ t: 'rel', min: 15 }] : kind === 'reminder' ? [{ t: 'rel', min: 0 }] : [],
+    nag: 0,
+    subtasks: [],
     mode: 'none',
     freq: 'weekly',
     interval: 1,
     days: [D.dow(d)],
     until: '',
   };
+  if (!preset) return base;
+  // Valores que llegan de la captura rápida
+  const p = { ...base };
+  for (const k of ['title', 'date', 'allDay', 'start', 'end', 'time', 'priority', 'reminders']) if (preset[k] !== undefined) p[k] = preset[k];
+  const rp = preset.repeat;
+  if (rp && rp.freq) Object.assign(p, { mode: modeOf(rp, p.date), freq: rp.freq, interval: rp.interval || 1, days: rp.days && rp.days.length ? rp.days.slice() : [D.dow(p.date)], until: rp.until || '' });
+  return p;
 }
 
 function buildRepeat(f) {
@@ -137,6 +148,21 @@ export function Editor({ layer }) {
   };
   const setAbs = (i, at) => set({ reminders: f.reminders.map((r, j) => (j === i ? { t: 'abs', at } : r)) });
   const dropReminder = (i) => set({ reminders: f.reminders.filter((_, j) => j !== i) });
+  const subsRef = useRef(null);
+  const focusNewSub = useRef(false);
+  const addSub = () => {
+    focusNewSub.current = true;
+    set({ subtasks: f.subtasks.concat([{ id: store.uid().slice(0, 8), title: '' }]) });
+  };
+  // El cursor pasa al paso recién añadido en cuanto aparece, sin perder pulsaciones
+  useLayoutEffect(() => {
+    if (!focusNewSub.current) return;
+    focusNewSub.current = false;
+    const list = subsRef.current ? subsRef.current.querySelectorAll('input') : [];
+    if (list.length) list[list.length - 1].focus();
+  }, [f.subtasks.length]);
+  const setSub = (i, title) => set({ subtasks: f.subtasks.map((x, j) => (j === i ? { ...x, title } : x)) });
+  const dropSub = (i) => set({ subtasks: f.subtasks.filter((_, j) => j !== i) });
 
   const save = async () => {
     if (!valid) return;
@@ -150,7 +176,10 @@ export function Editor({ layer }) {
       repeat: buildRepeat(f),
     };
     if (kind === 'event') Object.assign(fields, { allDay: f.allDay, start: f.start, end: f.end === f.start ? D.minToHM(D.hmToMin(f.start) + 60) : f.end });
-    if (kind === 'task') Object.assign(fields, { time: f.time, priority: f.priority });
+    if (kind === 'task') {
+      Object.assign(fields, { time: f.time, priority: f.priority, nag: +f.nag || 0 });
+      fields.subtasks = f.subtasks.map((x) => ({ id: x.id, title: x.title.trim() })).filter((x) => x.title);
+    }
     if (kind === 'reminder') Object.assign(fields, { time: f.time });
     if (editing) {
       actions.saveEdit(editing, fields, () => {
@@ -253,7 +282,29 @@ export function Editor({ layer }) {
           </label>
         </div>
         ${f.reminders.some((r) => r.t === 'rel') && html`<p class="note">Los avisos «antes» se calculan respecto a ${baseLabel}.</p>`}
+        ${kind === 'task' &&
+        html`<label class="cell">
+            <span>Insistir hasta completarla</span>
+            <select value=${String(f.nag)} onChange=${(e) => set({ nag: +e.target.value })}>
+              ${NAG_OPTIONS.map((o) => html`<option value=${String(o.min)}>${o.label}</option>`)}
+            </select>
+          </label>
+          ${f.nag > 0 && html`<p class="note">${f.nag >= 1440 ? 'Un aviso a las 9:00 de cada día siguiente a la fecha límite' : `Avisos desde ${f.time ? 'la hora límite' : 'las 9:00 del día límite'}, solo entre las 8:00 y las 22:00`}, mientras siga pendiente y durante 14 días como máximo.</p>`}`}
       </div>
+
+      ${kind === 'task' &&
+      html`<div class="group">
+        <div class="cell stack" ref=${subsRef}>
+          <span>Subtareas</span>
+          ${f.subtasks.map(
+            (x, i) => html`<div class="sub-edit" key=${x.id}>
+              <input type="text" placeholder="Paso" value=${x.title} maxlength="120" enterkeyhint="next" onInput=${(e) => setSub(i, e.target.value)} onKeyDown=${(e) => e.key === 'Enter' && addSub()} />
+              <button class="clear" onClick=${() => dropSub(i)} aria-label="Quitar subtarea"><${Icon} name="close" size=${14} /></button>
+            </div>`
+          )}
+          <button class="add-select" onClick=${addSub}><${Icon} name="plus" size=${16} /> Añadir subtarea</button>
+        </div>
+      </div>`}
 
       <div class="group">
         <div class="cell stack">

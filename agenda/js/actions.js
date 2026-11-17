@@ -19,6 +19,8 @@ export async function toggleDone(inst) {
   });
 }
 
+export const toggleSub = (inst, subId) => store.save([M.toggleSub(fresh(inst), inst.key, subId)]);
+
 export async function setCancelled(inst, cancelled) {
   await store.save([M.setCancelled(fresh(inst), inst.key, cancelled, nowISO())]);
   toast(cancelled ? 'Tarea cancelada' : 'Tarea restaurada', {

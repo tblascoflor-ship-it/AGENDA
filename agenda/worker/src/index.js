@@ -5,7 +5,7 @@
 // Todo el acceso exige la clave privada AUTH_TOKEN (secreto del Worker).
 
 import * as D from '../../js/shared/dates.js';
-import { overview, overviewText } from '../../js/shared/model.js';
+import { overview, overviewText, weekAhead, weekAheadText } from '../../js/shared/model.js';
 import { computeFires, activeUntil } from '../../js/shared/reminders.js';
 import { buildICS } from '../../js/shared/ics.js';
 import { utcToZoned, DEFAULT_TZ } from '../../js/shared/tz.js';
@@ -200,7 +200,7 @@ async function tick(env, db) {
     }
   }
 
-  const m = await getMeta(db, ['horizon', 'digest', 'digest_day', 'clean_day']);
+  const m = await getMeta(db, ['horizon', 'digest', 'digest_day', 'clean_day', 'weekly', 'weekly_day']);
   const local = utcToZoned(now, tz);
   const writes = [setMeta(db, 'last_tick', now)];
 
@@ -221,6 +221,19 @@ async function tick(env, db) {
         const first = ov.today.timed[0];
         const body = parts.join(' · ') + (first ? `\nPrimero: ${D.minToHM(first.s)} ${first.inst.title}` : '');
         await pushToAll(env, db, { title: `Tu día · ${D.dayName(local.date)} ${D.parse(local.date).d}`, body, date: local.date }, now);
+      }
+    }
+  }
+  // Revisión semanal opcional: lo que viene en los próximos 7 días
+  if (m.weekly && m.weekly_day !== local.date) {
+    const [wday, wtime] = m.weekly.split('|');
+    const late = D.hmToMin(local.hm) - D.hmToMin(wtime);
+    if (D.dow(local.date) === +wday && late >= 0 && late < 180) {
+      writes.push(setMeta(db, 'weekly_day', local.date));
+      const w = weekAhead(await loadActive(db, D.addDays(local.date, -1)), local.date);
+      if (w.events || w.tasks.length || w.carried) {
+        const txt = weekAheadText(w);
+        await pushToAll(env, db, { title: txt.title, body: txt.body, date: w.from }, now);
       }
     }
   }
@@ -254,7 +267,7 @@ async function applyChanges(env, db, changes) {
     if (prev !== undefined && prev >= c.updatedAt) continue; // gana la modificación más reciente
     rev++;
     const agenda = AGENDA_KINDS.includes(c.kind);
-    const hasRem = agenda && !c.deleted && ((c.reminders && c.reminders.length) || Object.values(c.overrides || {}).some((o) => o && o.reminders && o.reminders.length)) ? 1 : 0;
+    const hasRem = agenda && !c.deleted && ((c.reminders && c.reminders.length) || c.nag > 0 || Object.values(c.overrides || {}).some((o) => o && ((o.reminders && o.reminders.length) || o.nag > 0))) ? 1 : 0;
     stmts.push(
       db
         .prepare(
@@ -273,7 +286,11 @@ async function applyChanges(env, db, changes) {
     for (const c of agendaChanged) stmts.push(delPending(db, c.id), ...fireStatements(db, c, now - GRACE, horizon, tz));
   }
   const settings = applied.find((c) => c.kind === 'settings');
-  if (settings) stmts.push(setMeta(db, 'digest', settings.digestOn && D.isHM(settings.digestTime) ? settings.digestTime : ''));
+  if (settings) {
+    stmts.push(setMeta(db, 'digest', settings.digestOn && D.isHM(settings.digestTime) ? settings.digestTime : ''));
+    const wday = Math.min(7, Math.max(1, parseInt(settings.weeklyDay, 10) || 7));
+    stmts.push(setMeta(db, 'weekly', settings.weeklyOn && D.isHM(settings.weeklyTime) ? `${wday}|${settings.weeklyTime}` : ''));
+  }
   await batchAll(db, stmts);
   return applied.length;
 }

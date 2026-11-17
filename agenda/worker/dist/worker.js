@@ -116,6 +116,10 @@ function instance(item, key) {
     time: item.time || "",
     priority: item.priority || "medium",
     reminders: item.reminders || [],
+    nag: item.nag || 0,
+    // avisos insistentes: minutos entre avisos mientras siga pendiente
+    subtasks: item.subtasks || [],
+    // [{ id, title }]
     ...ov || {},
     item,
     id: item.id,
@@ -127,7 +131,9 @@ function instance(item, key) {
     date: ov && ov.date || key,
     origDate: rec ? key : item.origDate || item.date,
     doneAt: st.doneAt || null,
-    cancelledAt: st.cancelledAt || null
+    cancelledAt: st.cancelledAt || null,
+    subDone: st.subDone || []
+    // ids de las subtareas hechas (por repetición en las series)
   };
 }
 function expand(item, from, to) {
@@ -269,6 +275,38 @@ function overviewText(ov, today, nowHM) {
   if (!ov.overdue.length && !ov.tasksToday.length) lines.push("", "Sin tareas pendientes para hoy");
   return lines.join("\n");
 }
+function weekAhead(items, today) {
+  const from = addDays(today, 1);
+  const to = addDays(today, 7);
+  const load = {};
+  let events = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(from, i);
+    const seg = daySegments(items, d);
+    const own = seg.timed.filter((t) => !t.before);
+    events += seg.allDay.length + own.length + seg.points.length;
+    load[d] = seg.timed.reduce((a, t) => a + t.e - t.s, 0);
+  }
+  const pending = pendingTasks(items, to);
+  const tasks = pending.filter((t) => t.date >= from);
+  for (const t of tasks) load[t.date] += 60;
+  const carried = pending.filter((t) => t.date < from).length;
+  let busiest = "";
+  for (const d in load) if (load[d] > 0 && (!busiest || load[d] > load[busiest])) busiest = d;
+  return { from, to, events, tasks, carried, busiest };
+}
+function weekAheadText(w) {
+  const a = parse(w.from);
+  const b = parse(w.to);
+  const title = `Tu semana: ${a.d}${a.m !== b.m ? " " + MESES_CORTO[a.m - 1] : ""}\u2013${b.d} ${MESES_CORTO[b.m - 1]}`;
+  const head = [`${w.events} ${w.events === 1 ? "actividad" : "actividades"}`, `${w.tasks.length} ${w.tasks.length === 1 ? "tarea" : "tareas"}`];
+  if (w.carried) head.push(`${w.carried} ${w.carried === 1 ? "pendiente" : "pendientes"} de antes`);
+  const lines = [head.join(" \xB7 ")];
+  const top = w.tasks.slice().sort((x, y) => prioRank(x.priority) - prioRank(y.priority) || x.date.localeCompare(y.date)).slice(0, 3);
+  if (top.length) lines.push("Tareas: " + top.map((t) => `${DIAS_CORTO[dow(t.date) - 1]} ${t.title}`).join("; "));
+  if (w.busiest) lines.push(`D\xEDa m\xE1s cargado: ${dayName(w.busiest)}`);
+  return { title, body: lines.join("\n") };
+}
 
 // js/shared/tz.js
 var DEFAULT_TZ = "Europe/Madrid";
@@ -345,7 +383,7 @@ function computeFires(item, fromMs, toMs, tz = DEFAULT_TZ) {
   if (!item || item.deleted || !item.date) return [];
   const all = [item.reminders || []].concat(Object.values(item.overrides || {}).map((o) => o && o.reminders || []));
   let maxMin = 0;
-  let any = false;
+  let any = item.kind === "task" && (item.nag > 0 || Object.values(item.overrides || {}).some((o) => o && o.nag > 0));
   for (const list of all)
     for (const r of list) {
       any = true;
@@ -356,7 +394,7 @@ function computeFires(item, fromMs, toMs, tz = DEFAULT_TZ) {
   const toDate = addDays(utcToZoned(toMs, tz).date, Math.ceil(maxMin / 1440) + 1);
   const out = /* @__PURE__ */ new Map();
   const rec = isRecurring(item);
-  const add = (inst, fireAt, absKey) => {
+  const add = (inst, fireAt, absKey, body) => {
     if (!(fireAt >= fromMs && fireAt < toMs)) return;
     const minute = Math.floor(fireAt / 6e4);
     const id = `${item.id}|${absKey || inst.key}|${minute}`;
@@ -367,7 +405,7 @@ function computeFires(item, fromMs, toMs, tz = DEFAULT_TZ) {
       id,
       fireAt: minute * 6e4,
       title: inst.title || (inst.kind === "task" ? "Tarea" : "Recordatorio"),
-      body: whenText(inst, fireLocal.date, Math.round((base - fireAt) / 6e4)),
+      body: body ? body(fireLocal.date) : whenText(inst, fireLocal.date, Math.round((base - fireAt) / 6e4)),
       date: inst.date
     });
   };
@@ -393,7 +431,37 @@ function computeFires(item, fromMs, toMs, tz = DEFAULT_TZ) {
       if (next) add(next, fireAt, "abs");
     }
   }
+  if (item.kind === "task") {
+    const list = rec ? expand(item, addDays(fromDate, -NAG_DAYS), toDate) : insts;
+    for (const inst of list) {
+      if (!(inst.nag > 0) || !isPending(inst)) continue;
+      const text = (fireDate) => fireDate === inst.date ? inst.time ? `Sigue pendiente \xB7 venc\xEDa a las ${inst.time}` : "Sigue pendiente \xB7 era para hoy" : `Sigue pendiente desde el ${fmtShort(inst.date)}`;
+      for (const t of nagTimes(inst, inst.nag, fromMs, toMs, tz)) add(inst, t, "nag", text);
+    }
+  }
   return Array.from(out.values()).sort((a, b) => a.fireAt - b.fireAt);
+}
+var NAG_DAYS = 14;
+function nagTimes(inst, step, fromMs, toMs, tz) {
+  const res = [];
+  if (step >= 1440) {
+    for (let d = addDays(utcToZoned(fromMs, tz).date, -1); ; d = addDays(d, 1)) {
+      const t = zonedToUtc(d, DEFAULT_TIME, tz);
+      if (t >= toMs) break;
+      const n = diffDays(inst.date, d);
+      if (n >= 1 && n <= NAG_DAYS && t >= fromMs) res.push(t);
+    }
+    return res;
+  }
+  const base = zonedToUtc(inst.date, baseHM(inst), tz);
+  const stepMs = step * 6e4;
+  const last = base + NAG_DAYS * 864e5;
+  const k = Math.max(1, Math.ceil((fromMs - base) / stepMs));
+  for (let t = base + k * stepMs; t < toMs && t <= last; t += stepMs) {
+    const hm = utcToZoned(t, tz).hm;
+    if (hm >= "08:00" && hm <= "22:00") res.push(t);
+  }
+  return res;
 }
 function activeUntil(item) {
   if (!item || item.deleted || !item.date) return "0000-00-00";
@@ -771,7 +839,7 @@ async function tick(env, db) {
       await db.prepare("UPDATE notif SET status = 2 WHERE id = ?").bind(n.id).run();
     }
   }
-  const m = await getMeta(db, ["horizon", "digest", "digest_day", "clean_day"]);
+  const m = await getMeta(db, ["horizon", "digest", "digest_day", "clean_day", "weekly", "weekly_day"]);
   const local = utcToZoned(now, tz);
   const writes = [setMeta(db, "last_tick", now)];
   if ((+m.horizon || 0) - now < REFRESH) await regenAll(db, now, tz);
@@ -790,6 +858,18 @@ async function tick(env, db) {
         const body = parts2.join(" \xB7 ") + (first ? `
 Primero: ${minToHM(first.s)} ${first.inst.title}` : "");
         await pushToAll(env, db, { title: `Tu d\xEDa \xB7 ${dayName(local.date)} ${parse(local.date).d}`, body, date: local.date }, now);
+      }
+    }
+  }
+  if (m.weekly && m.weekly_day !== local.date) {
+    const [wday, wtime] = m.weekly.split("|");
+    const late = hmToMin(local.hm) - hmToMin(wtime);
+    if (dow(local.date) === +wday && late >= 0 && late < 180) {
+      writes.push(setMeta(db, "weekly_day", local.date));
+      const w = weekAhead(await loadActive(db, addDays(local.date, -1)), local.date);
+      if (w.events || w.tasks.length || w.carried) {
+        const txt = weekAheadText(w);
+        await pushToAll(env, db, { title: txt.title, body: txt.body, date: w.from }, now);
       }
     }
   }
@@ -818,7 +898,7 @@ async function applyChanges(env, db, changes) {
     if (prev !== void 0 && prev >= c.updatedAt) continue;
     rev++;
     const agenda = AGENDA_KINDS.includes(c.kind);
-    const hasRem = agenda && !c.deleted && (c.reminders && c.reminders.length || Object.values(c.overrides || {}).some((o) => o && o.reminders && o.reminders.length)) ? 1 : 0;
+    const hasRem = agenda && !c.deleted && (c.reminders && c.reminders.length || c.nag > 0 || Object.values(c.overrides || {}).some((o) => o && (o.reminders && o.reminders.length || o.nag > 0))) ? 1 : 0;
     stmts.push(
       db.prepare(
         `INSERT INTO items (id, kind, data, updated_at, deleted, rev, active_until, has_rem) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -835,7 +915,11 @@ async function applyChanges(env, db, changes) {
     for (const c of agendaChanged) stmts.push(delPending(db, c.id), ...fireStatements(db, c, now - GRACE, horizon, tz));
   }
   const settings = applied.find((c) => c.kind === "settings");
-  if (settings) stmts.push(setMeta(db, "digest", settings.digestOn && isHM(settings.digestTime) ? settings.digestTime : ""));
+  if (settings) {
+    stmts.push(setMeta(db, "digest", settings.digestOn && isHM(settings.digestTime) ? settings.digestTime : ""));
+    const wday = Math.min(7, Math.max(1, parseInt(settings.weeklyDay, 10) || 7));
+    stmts.push(setMeta(db, "weekly", settings.weeklyOn && isHM(settings.weeklyTime) ? `${wday}|${settings.weeklyTime}` : ""));
+  }
   await batchAll(db, stmts);
   return applied.length;
 }

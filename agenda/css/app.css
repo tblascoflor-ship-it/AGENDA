@@ -17,6 +17,7 @@
   --low: #2a9d68;
   --danger: #d92d35;
   --ok: #1f8f5c;
+  --bar: #2456e6;
   --scrim: rgba(12, 16, 26, 0.38);
   --shadow: 0 1px 2px rgba(20, 23, 31, 0.05);
   --tab-h: 54px;
@@ -41,6 +42,7 @@
   --low: #4cc38a;
   --danger: #ff6b6f;
   --ok: #4cc38a;
+  --bar: #5b8cff;
   --scrim: rgba(0, 0, 0, 0.55);
   --shadow: none;
   color-scheme: dark;
@@ -63,7 +65,8 @@
     --low: #4cc38a;
     --danger: #ff6b6f;
     --ok: #4cc38a;
-    --scrim: rgba(0, 0, 0, 0.55);
+    --bar: #5b8cff;
+  --scrim: rgba(0, 0, 0, 0.55);
     --shadow: none;
     color-scheme: dark;
   }
@@ -1638,6 +1641,178 @@ p {
   padding: 32px;
   text-align: center;
   color: var(--ink2);
+}
+
+/* ---------- Versión 1.1: subtareas, captura rápida y estadísticas ---------- */
+.top-actions {
+  display: flex;
+  gap: 8px;
+}
+.group.pad {
+  padding: 14px;
+}
+.sub {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 5px 0;
+  font-size: 16px;
+  width: 100%;
+}
+.sub i {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  border: 2px solid var(--ink3);
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: #fff;
+  margin-top: 1px;
+}
+.sub.on i {
+  background: var(--ok);
+  border-color: var(--ok);
+}
+.sub.on span {
+  color: var(--ink3);
+  text-decoration: line-through;
+}
+.sub span {
+  overflow-wrap: anywhere;
+}
+.sub-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sub-edit input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  border-radius: 9px;
+  padding: 9px 11px;
+  font-size: 16px;
+  outline: none;
+}
+button.add-select {
+  background: none;
+}
+.quick-title {
+  font-size: 19px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.example {
+  text-align: left;
+  color: var(--accent);
+  font-size: 15.5px;
+  padding: 3px 0;
+}
+.tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 6px;
+}
+.tile {
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 13px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.tile strong {
+  font-size: 30px;
+  line-height: 1.1;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.tile span {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.tile em {
+  font-style: normal;
+  font-size: 12.5px;
+  color: var(--ink2);
+  margin-top: 3px;
+}
+.cols {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  height: 150px;
+  border-bottom: 1px solid var(--line);
+}
+.colbar {
+  display: grid;
+  grid-template-rows: 18px 1fr;
+  justify-items: center;
+  align-items: end;
+  position: relative;
+  padding-bottom: 0;
+}
+.colbar i {
+  width: 22px;
+  max-width: 60%;
+  background: var(--bar);
+  border-radius: 4px 4px 0 0;
+  opacity: 0.55;
+  align-self: end;
+}
+.colbar.on i {
+  opacity: 1;
+}
+.colval {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.collab {
+  position: absolute;
+  bottom: -22px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink3);
+}
+.colbar.on .collab {
+  color: var(--ink);
+}
+.chart-note {
+  font-size: 13.5px;
+  color: var(--ink2);
+  margin-top: 30px;
+}
+.hbar + .hbar {
+  margin-top: 12px;
+}
+.hbar + .chart-note {
+  margin-top: 14px;
+}
+.hbar-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 14.5px;
+  margin-bottom: 5px;
+}
+.hbar-head span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.hbar-head b {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.hbar-track i {
+  display: block;
+  height: 12px;
+  border-radius: 0 4px 4px 0;
 }
 
 @media (min-width: 700px) {

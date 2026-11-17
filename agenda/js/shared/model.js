@@ -26,7 +26,7 @@ export const PRIORITIES = [
 export const prioRank = (p) => (PRIORITIES.find((x) => x.id === p) || PRIORITIES[2]).rank;
 export const prioLabel = (p) => (PRIORITIES.find((x) => x.id === p) || PRIORITIES[2]).label;
 
-export const OV_FIELDS = ['title', 'notes', 'categoryId', 'date', 'allDay', 'start', 'end', 'time', 'priority', 'reminders'];
+export const OV_FIELDS = ['title', 'notes', 'categoryId', 'date', 'allDay', 'start', 'end', 'time', 'priority', 'reminders', 'nag', 'subtasks'];
 const FAR_PAST = '0001-01-01';
 
 export const isRecurring = (item) => !!(item && item.repeat && item.repeat.freq);
@@ -100,6 +100,8 @@ export function instance(item, key) {
     time: item.time || '',
     priority: item.priority || 'medium',
     reminders: item.reminders || [],
+    nag: item.nag || 0, // avisos insistentes: minutos entre avisos mientras siga pendiente
+    subtasks: item.subtasks || [], // [{ id, title }]
     ...(ov || {}),
     item,
     id: item.id,
@@ -112,6 +114,7 @@ export function instance(item, key) {
     origDate: rec ? key : item.origDate || item.date,
     doneAt: st.doneAt || null,
     cancelledAt: st.cancelledAt || null,
+    subDone: st.subDone || [], // ids de las subtareas hechas (por repetición en las series)
   };
 }
 
@@ -278,6 +281,18 @@ export function setDone(item, key, done, nowISO) {
 export function setCancelled(item, key, cancelled, nowISO) {
   return setState(item, key, { cancelledAt: cancelled ? nowISO : null, doneAt: null }, cancelled ? 'cancelled' : 'restored', nowISO);
 }
+// Marca o desmarca una subtarea (en las series, solo en esa repetición)
+export function toggleSub(item, key, subId) {
+  const flip = (list) => (list.includes(subId) ? list.filter((x) => x !== subId) : list.concat([subId]));
+  if (!isRecurring(item)) return { ...item, subDone: flip(item.subDone || []) };
+  const occ = { ...(item.occ || {}) };
+  const cur = { ...(occ[key] || {}) };
+  cur.subDone = flip(cur.subDone || []);
+  if (!cur.subDone.length) delete cur.subDone;
+  if (Object.keys(cur).length) occ[key] = cur;
+  else delete occ[key];
+  return { ...item, occ };
+}
 // Cambia la fecha de una tarea (o de una repetición) conservando todo lo demás
 export function reschedule(item, key, newDate, nowISO) {
   if (isRecurring(item)) {
@@ -419,4 +434,40 @@ export function overviewText(ov, today, nowHM) {
   }
   if (!ov.overdue.length && !ov.tasksToday.length) lines.push('', 'Sin tareas pendientes para hoy');
   return lines.join('\n');
+}
+
+// ---------- Revisión semanal: lo que viene en los próximos 7 días ----------
+
+export function weekAhead(items, today) {
+  const from = D.addDays(today, 1);
+  const to = D.addDays(today, 7);
+  const load = {};
+  let events = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = D.addDays(from, i);
+    const seg = daySegments(items, d);
+    const own = seg.timed.filter((t) => !t.before);
+    events += seg.allDay.length + own.length + seg.points.length;
+    load[d] = seg.timed.reduce((a, t) => a + t.e - t.s, 0);
+  }
+  const pending = pendingTasks(items, to);
+  const tasks = pending.filter((t) => t.date >= from);
+  for (const t of tasks) load[t.date] += 60;
+  const carried = pending.filter((t) => t.date < from).length;
+  let busiest = '';
+  for (const d in load) if (load[d] > 0 && (!busiest || load[d] > load[busiest])) busiest = d;
+  return { from, to, events, tasks, carried, busiest };
+}
+
+export function weekAheadText(w) {
+  const a = D.parse(w.from);
+  const b = D.parse(w.to);
+  const title = `Tu semana: ${a.d}${a.m !== b.m ? ' ' + D.MESES_CORTO[a.m - 1] : ''}–${b.d} ${D.MESES_CORTO[b.m - 1]}`;
+  const head = [`${w.events} ${w.events === 1 ? 'actividad' : 'actividades'}`, `${w.tasks.length} ${w.tasks.length === 1 ? 'tarea' : 'tareas'}`];
+  if (w.carried) head.push(`${w.carried} ${w.carried === 1 ? 'pendiente' : 'pendientes'} de antes`);
+  const lines = [head.join(' · ')];
+  const top = w.tasks.slice().sort((x, y) => prioRank(x.priority) - prioRank(y.priority) || x.date.localeCompare(y.date)).slice(0, 3);
+  if (top.length) lines.push('Tareas: ' + top.map((t) => `${D.DIAS_CORTO[D.dow(t.date) - 1]} ${t.title}`).join('; '));
+  if (w.busiest) lines.push(`Día más cargado: ${D.dayName(w.busiest)}`);
+  return { title, body: lines.join('\n') };
 }

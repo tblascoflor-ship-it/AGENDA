@@ -3,7 +3,7 @@
 import { html, useState, useRef, useEffect } from '../vendor/preact-htm.js';
 import * as D from '../shared/dates.js';
 import * as M from '../shared/model.js';
-import { reminderLabel } from '../shared/reminders.js';
+import { reminderLabel, nagLabel } from '../shared/reminders.js';
 import * as store from '../store.js';
 import * as actions from '../actions.js';
 import { Sheet, Icon, Check, TaskRow, EventRow, Empty, openLayer, closeLayer, overdueText, ui } from './common.js';
@@ -53,13 +53,29 @@ export function Detail({ layer }) {
         ${inst.recurring && html`<div class="cell info"><${Icon} name="repeat" size=${18} /><span>${M.repeatLabel(item.repeat, item.date, today)}${inst.edited ? ' · esta ocurrencia está modificada' : ''}</span></div>`}
         ${cat && html`<div class="cell info"><${Icon} name="tag" size=${18} /><span>${cat.name}</span></div>`}
         ${inst.reminders.length > 0 && html`<div class="cell info"><${Icon} name="bell" size=${18} /><span>${inst.reminders.map((r) => reminderLabel(r, today)).join(' · ')}</span></div>`}
+        ${task && inst.nag > 0 && html`<div class="cell info"><${Icon} name="bell" size=${18} /><span>Insiste ${nagLabel(inst.nag).toLowerCase()} hasta completarla</span></div>`}
         ${inst.notes && html`<div class="cell info notes"><${Icon} name="note" size=${18} /><span>${inst.notes}</span></div>`}
       </div>
+
+      ${task &&
+      inst.subtasks.length > 0 &&
+      html`<div class="group">
+        <div class="cell stack">
+          <span>Subtareas · ${inst.subtasks.filter((x) => inst.subDone.includes(x.id)).length} de ${inst.subtasks.length}</span>
+          ${inst.subtasks.map((x) => {
+            const on = inst.subDone.includes(x.id);
+            return html`<button key=${x.id} class=${'sub' + (on ? ' on' : '')} role="checkbox" aria-checked=${on} onClick=${() => actions.toggleSub(inst, x.id)}>
+              <i>${on && html`<${Icon} name="check" size=${13} stroke=${3} />`}</i><span>${x.title}</span>
+            </button>`;
+          })}
+        </div>
+      </div>`}
 
       ${task &&
       html`<div class="group">
         <button class="cell-btn" onClick=${() => actions.toggleDone(inst)}><${Icon} name=${inst.doneAt ? 'undo' : 'check'} size=${18} /> ${inst.doneAt ? 'Volver a dejar pendiente' : 'Marcar como completada'}</button>
         ${pending && html`<button class="cell-btn" onClick=${() => openLayer({ type: 'reschedule', id: inst.id, key0: inst.key })}><${Icon} name="calendar" size=${18} /> Reprogramar</button>`}
+        ${pending && html`<button class="cell-btn" onClick=${() => openLayer({ type: 'slot', id: inst.id, key0: inst.key })}><${Icon} name="clock" size=${18} /> Buscar hueco en el calendario</button>`}
         ${!inst.doneAt &&
         html`<button class="cell-btn" onClick=${() => actions.setCancelled(inst, !inst.cancelledAt)}><${Icon} name=${inst.cancelledAt ? 'undo' : 'cancel'} size=${18} /> ${inst.cancelledAt ? 'Restaurar tarea' : 'Cancelar tarea'}</button>`}
       </div>`}

@@ -22,7 +22,7 @@ function Ring({ done, total }) {
   const f = total ? done / total : 0;
   return html`<svg class=${'ring' + (total && done === total ? ' full' : '')} width="44" height="44" viewBox="0 0 44 44" aria-hidden="true">
     <circle cx="22" cy="22" r=${r} class="ring-bg" />
-    <circle cx="22" cy="22" r=${r} class="ring-fg" stroke-dasharray=${`${c * f} ${c}`} transform="rotate(-90 22 22)" />
+    ${f > 0 && html`<circle cx="22" cy="22" r=${r} class="ring-fg" stroke-dasharray=${`${c * f} ${c}`} transform="rotate(-90 22 22)" />`}
   </svg>`;
 }
 

@@ -2,7 +2,7 @@
 
 Calendario, tareas y recordatorios con notificaciones reales en iPhone. Aplicación web instalable (PWA), privada y gratuita.
 
-**Para instalarla, sigue [INSTALACION.md](INSTALACION.md).**
+**Para instalarla, sigue [INSTALACION.md](INSTALACION.md).** Novedades de cada versión: [NOVEDADES.md](NOVEDADES.md).
 
 ## Cómo está hecha
 
@@ -22,7 +22,9 @@ js/shared/                                Lógica pura, compartida por la app y 
   dates.js, tz.js                           fechas y zona horaria (Europe/Madrid)
   model.js                                  recurrencias, excepciones, estado de las tareas
   reminders.js                              cálculo del instante y el texto de cada aviso
-  ics.js                                    exportación a calendario (.ics)
+  ics.js, icsimport.js                      exportación e importación de calendarios (.ics)
+  quick.js                                  captura rápida: interpreta una frase en español
+  slots.js, stats.js                        huecos libres y estadísticas
 worker/src/                               Código del servidor
 worker/dist/worker.js                     Servidor empaquetado en un archivo (el que se pega en Cloudflare)
 tests/                                    Pruebas automáticas
